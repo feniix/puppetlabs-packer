@@ -1,0 +1,42 @@
+#!/usr/bin/ruby
+
+
+hostname = `vmtoolsd --cmd "info-get guestinfo.hostname"`
+
+hostname = hostname.chomp
+
+puts "Nice to meet you, my VM name is '#{hostname}'."
+
+puts "\n"
+
+puts '- Setting local hostname...'
+
+File.open('/etc/HOSTNAME', 'w') do |f|
+  f.write(hostname)
+end
+
+
+
+puts '- Re-obtaining DHCP lease...'
+<% if ['11.4'].include? @operatingsystemrelease -%>
+Kernel.system("/bin/hostname '#{hostname}'")
+Kernel.system('/etc/init.d/network restart')
+<% else %>
+Kernel.system('systemctl restart wicked.service')
+Kernel.system("hostnamectl set-hostname #{hostname}")
+<% end %>
+puts '- Cleaning up...'
+
+Kernel.system('rm /etc/vsphere-bootstrap.rb')
+
+<% if ['15.0'].include? @operatingsystemrelease -%>
+# Disable the oneshot service that runs this script:
+Kernel.system('/bin/systemctl disable vsphere.bootstrap.service')
+<% else -%>
+# With NetworkManager, /etc/rc.local is what runs this script; Make it a noop after the first run:
+Kernel.system('echo "exit 0" > /etc/rc.local')
+<% end -%>
+
+puts "\n"
+
+puts 'Done!'

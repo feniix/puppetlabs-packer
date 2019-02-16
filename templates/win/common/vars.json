@@ -1,0 +1,16 @@
+{
+  "version"             : "20190118_DEV",
+
+  "headless"            : "true",
+
+  "winrm_username"      : "Administrator",
+  "winrm_password"      : "PackerAdmin",
+  "winrm_timeout"       : "1h",
+  "winupdate_timeout"   : "400m",
+  "shutdown_timeout"    : "1h",
+
+  "packer_download_dir" : "C:/Packer/Downloads",
+
+  "artifactory_baseurl" : "https://artifactory.delivery.puppetlabs.net/artifactory/generic/iso/windows/",
+  "file_baseurl"        : "file:///srv/packer/iso/"
+}

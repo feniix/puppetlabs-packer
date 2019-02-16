@@ -1,0 +1,18 @@
+#!/bin/bash
+
+hostname=`vmtoolsd --cmd "info-get guestinfo.hostname"`
+if [ $? -ne 0 ]
+then
+  hostname=vro-73-x86_64
+fi
+
+echo "Nice to meet you, my VM name is $hostname"
+
+echo '- Setting local hostname...'
+
+echo $hostname > /etc/HOSTNAME
+
+hostname $hostname
+
+echo "- Restarting network..."
+service network restart

@@ -1,0 +1,102 @@
+{
+  "variables": {
+    "template_name"                                        : null,
+    "beakerhost"                                           : null,
+    "version"                                              : null,
+    "puppet_aio"                                           : null,
+
+    "vmware_vsphere_nocm_required_modules"                 : null,
+    "vmware_vsphere_nocm_vmx_data_memsize"                 : null,
+    "vmware_vsphere_nocm_vmx_data_numvcpus"                : null,
+    "vmware_vsphere_nocm_vmx_data_ethernet0_virtualDev"    : "vmxnet3",
+    "vmware_vsphere_nocm_vmx_data_ethernet0_pciSlotNumber" : "33",
+
+    "support_status"                        : "puppet_maintained",
+    "project_root"                          : "../../../..",
+    "headless"                              : "true",
+    "template_config"                       : "vsphere-nocm",
+    "provisioner"                           : "vmware",
+    "shutdown_command"                      : "/sbin/halt -h -p",
+
+    "qa_root_passwd"                        : "{{user `qa_root_passwd`}}",
+    "qa_root_passwd_plain"                  : "{{user `qa_root_passwd_plain`}}",
+    "packer_sha"                            : "{{user `packer_sha`}}",
+    "packer_source_dir"                     : "{{user `packer_vm_src_dir`}}",
+    "packer_output_dir"                     : "{{user `packer_vm_out_dir`}}"
+  },
+
+  "builders": [
+    {
+      "name"                                : "{{user `template_name`}}-{{user `provisioner`}}-{{user `template_config`}}",
+      "vm_name"                             : "packer-{{build_name}}",
+      "type"                                : "vmware-vmx",
+      "source_path"                         : "{{user `packer_source_dir`}}/output-{{user `template_name`}}-{{user `provisioner`}}-base/packer-{{user `template_name`}}-{{user `provisioner`}}-base.vmx",
+      "output_directory"                    : "{{user `packer_output_dir`}}/output-{{build_name}}",
+
+      "headless"                            : "{{user `headless`}}",
+
+      "ssh_username"                        : "root",
+      "ssh_password"                        : "puppet",
+      "ssh_port"                            : 22,
+      "ssh_wait_timeout"                    : "10000s",
+      "ssh_pty"                             : "true",
+
+      "shutdown_command"                    : "{{user `shutdown_command`}}",
+
+      "vmx_data"                            : {
+        "annotation"                        : "Packer build: {{user `template_name`}}-{{user `version`}} built {{isotime}} SHA: {{user `packer_sha`}}"
+      },
+      "vmx_data_post"                       : {
+        "memsize"                           : "{{user `vmware_vsphere_nocm_vmx_data_memsize`}}",
+        "numvcpus"                          : "{{user `vmware_vsphere_nocm_vmx_data_numvcpus`}}",
+        "ethernet0.virtualDev"              : "{{user `vmware_vsphere_nocm_vmx_data_ethernet0_virtualDev`}}",
+        "ethernet0.pciSlotNumber"           : "{{user `vmware_vsphere_nocm_vmx_data_ethernet0_pciSlotNumber`}}"
+      }
+    }
+  ],
+
+  "provisioners": [
+    {
+      "type"                                : "shell",
+      "execute_command"                     : "{{.Vars}} bash '{{.Path}}' {{user `vmware_vsphere_nocm_required_modules`}}",
+      "environment_vars"                    : [
+        "PUPPET_AIO={{user `puppet_aio`}}",
+        "PC_REPO={{user `pc_repo`}}"
+      ],
+      "scripts"                             : [
+        "{{user `project_root`}}/scripts/bootstrap-aio.sh"
+      ]
+    },
+
+    {
+      "type"                                : "file",
+      "source"                              : "{{user `project_root`}}/hiera",
+      "destination"                         : "/tmp/packer-puppet-masterless"
+    },
+
+    {
+      "type"                                : "puppet-masterless",
+      "execute_command"                     : "{{.FacterVars}} PATH=$PATH:/opt/puppetlabs/bin puppet apply --verbose --detailed-exitcodes --hiera_config='/tmp/packer-puppet-masterless/hiera/hiera.yaml' --modulepath='/tmp/packer-puppet-masterless/manifests/modules' {{.ManifestFile}}",
+      "facter"                              : {
+        "provisioner"                       : "{{user `provisioner`}}",
+        "qa_root_passwd"                    : "{{user `qa_root_passwd`}}",
+        "qa_root_passwd_plain"              : "{{user `qa_root_passwd_plain`}}"
+      },
+      "manifest_dir"                        : "{{user `project_root`}}/manifests",
+      "manifest_file"                       : "{{user `project_root`}}/manifests/vsphere/nocm.pp"
+    },
+
+    {
+      "type"                                : "shell",
+      "environment_vars"                    : [
+        "PUPPET_AIO={{user `puppet_aio`}}",
+        "PC_REPO= {{user `pc_repo` }}"
+      ],
+      "scripts"                             : [
+        "{{user `project_root`}}/scripts/cleanup-aio.sh",
+        "{{user `project_root`}}/scripts/cleanup-packer.sh",
+        "{{user `project_root`}}/scripts/cleanup-scrub.sh"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+#!/usr/bin/ruby
+
+hostname = `vmtoolsd --cmd "info-get guestinfo.hostname"`
+
+hostname = hostname.chomp
+
+puts "Nice to meet you, my VM name is '#{hostname}'."
+
+puts "\n"
+
+puts '- Setting local hostname...'
+
+File.open('/etc/hostname', 'w') do |f|
+  f.write(hostname)
+end
+
+<% if ['28', '29'].include? @operatingsystemrelease -%>
+# systemd-networkd
+Kernel.system("/usr/bin/hostnamectl set-hostname #{hostname}")
+<% else -%>
+Kernel.system('hostname -F /etc/hostname')
+<% end -%>
+
+puts '- Re-obtaining DHCP lease...'
+
+<% if (@operatingsystem == 'RedHat') or (@operatingsystem == 'CentOS') or (@operatingsystem == 'Scientific') or (@operatingsystem == 'OracleLinux') -%>
+  <% if @operatingsystemmajrelease == '8'  -%>
+    Kernel.system('/sbin/service NetworkManager restart')
+    Kernel.system('/usr/sbin/ifdown ens33')
+    Kernel.system('/usr/sbin/ifup ens33')
+  <% end -%>
+  <% if @operatingsystemmajrelease == '7'  -%>
+    File.open('/var/lib/NetworkManager/dhclient-ens160.conf', 'a') do |f|
+      f << "send host-name #{hostname}"
+    end
+    Kernel.system('/sbin/service NetworkManager restart')
+    Kernel.system('/usr/sbin/ifdown ens160')
+    Kernel.system('/usr/sbin/ifup ens160')
+  <% end -%>
+  <% if @operatingsystemmajrelease == '6' -%>
+    File.open('/etc/dhcp/dhclient-eth0.conf', 'a') do |f|
+  <% end -%>
+  <% if @operatingsystemmajrelease == '5' -%>
+    File.open('/etc/dhclient-eth0.conf', 'a') do |f|
+  <% end -%>
+  <% if (@operatingsystemmajrelease == '6') or (@operatingsystemmajrelease == '5') -%>
+      f << "\nsend host-name #{hostname};"
+    end
+    network = File.read('/etc/sysconfig/network')
+    File.open('/etc/sysconfig/network', 'w') do |f|
+      network.gsub!(/localhost.localdomain/, "#{hostname}")
+      f.write(network)
+    end
+    Kernel.system('/etc/init.d/network restart')
+  <% end -%>
+<% end -%>
+
+<% if @operatingsystem == 'Fedora' -%>
+  <% if ['28', '29'].include? @operatingsystemrelease -%>
+# systemd-networkd's DHCP client uses /etc/machine-id instead of the
+# link layer address (as dhclient does) to generate a client ID.
+# /etc/machine-id will be the same on VMs cloned from the same template,
+# so regenerate it:
+File.delete('/etc/machine-id')
+Kernel.system('/bin/systemd-machine-id-setup')
+Kernel.system('/bin/systemctl daemon-reload')
+Kernel.system('/bin/systemctl restart systemd-networkd')
+  <% else -%>
+Kernel.system('/sbin/service NetworkManager restart')
+  <% end -%>
+<% end -%>
+
+puts '- Cleaning up...'
+
+<% if ['28', '29'].include? @operatingsystemrelease -%>
+# With systemd-networkd, disable the oneshot service that runs this script:
+Kernel.system('/bin/systemctl disable vsphere.bootstrap.service')
+<% else -%>
+# With NetworkManager, /etc/rc.d/rc.local is what runs this script; Make
+# it a noop after the first run:
+Kernel.system('rm /etc/vsphere-bootstrap.rb')
+Kernel.system('echo "exit 0" > /etc/rc.d/rc.local')
+<% end -%>
+
+puts "\n"
+
+puts 'Done!'
